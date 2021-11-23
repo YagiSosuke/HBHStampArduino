@@ -6,7 +6,7 @@
 4 カード型NFCも読めるようにする(UIDの桁数が違う場合でも)
 5 真ん中のボタンでパーツ切り替えができるようにする
 6 カード読み込み時のcsvを、もう少しわかりやすくする（一行にパネルの部位をまとめる、部位を変えるときは改行する）
-7-a 濁点、半濁点パネルを用意
+7-a がざだばぱパネルを用意
 いつか DMA転送で画像表示を素早くする
 **/
 #include <M5Stack.h>
@@ -47,84 +47,33 @@ bool img_sw=false;
 
 //スタンプに読み込まれている文字を記憶するクラス
 class StampWord{
-  private:
-  int Type;  //0あなまら, 1かさた, 2は, 3やわ
-  int Boin;  //0~4あ~お, 5~9が～ご, 10~14ぱ～ぽ
-  int Shiin; //0~9あ～わ
-
   public:
+  int Boin;  //0~4あ~お
+  int Shiin; //0~9あ～わ, 10が, 11ざ, 12だ, 13ば, 14ぱ, 15゛, 16゜
+  int beforeShiin;
+
   //初期設定
   StampWord(){
-    Type = 0;
     Boin = 0;
-    Shiin = 0;  
+    Shiin = 0; 
+    beforeShiin = 0; 
   }
   //母音変更
   void BoinChange(long addNum){
     //addNumだけ母音を足す
     //0あなまら, 1かさた, 2は, 3やわ
     if(addNum > 0){
-      switch(Type){
-        case 0:
-          if(Boin < 4){
-            Boin += addNum;
-          }else{
-            Boin = 0;
-          }
-          break;
-        case 1:
-          if(Boin < 9){
-            Boin += addNum;
-          }else{
-            Boin = 0;
-          }
-          break;
-        case 2:
-          if(Boin < 14){
-            Boin += addNum;
-          }else{
-            Boin = 0;
-          }
-          break;  
-        case 3:
-          if(Boin < 2){
-            Boin += addNum;
-          }else{
-            Boin = 0;
-          }
-          break;
-      }  
+      if(Boin < 4){
+        Boin += addNum;
+      }else{
+        Boin = 0;
+      }
     }else{
-      switch(Type){
-        case 0:
-          if(Boin > 0){
-            Boin += addNum;
-          }else{
-            Boin = 4;
-          }
-          break;
-        case 1:
-          if(Boin > 0){
-            Boin += addNum;
-          }else{
-            Boin = 9;
-          }
-          break;
-        case 2:
-          if(Boin > 0){
-            Boin += addNum;
-          }else{
-            Boin = 14;
-          }
-          break;  
-        case 3:
-          if(Boin > 0){
-            Boin += addNum;
-          }else{
-            Boin = 2;
-          }
-          break;
-      }  
+      if(Boin > 0){
+        Boin += addNum;
+      }else{
+        Boin = 4;
+      }
     }
     Serial.println("母音変更");
     Serial.print("母音:");
@@ -133,21 +82,15 @@ class StampWord{
     Serial.println(Shiin);
   }
   //子音変更
-  void ShiinChange(int cardNum){  
+  void ShiinChange(int cardNum){
+    beforeShiin = Shiin;
     Shiin = cardNum;
-    Boin = 0;
+    if(Shiin != 15 && Shiin != 16){
+      Boin = 0;
+    }
     
     //0あなまら, 1かさた, 2は, 3やわ
     //タイプ決定
-    if(cardNum==0 || cardNum==4 || cardNum==6 || cardNum==8){
-      Type = 0;
-    }else if(cardNum==1 || cardNum==2 || cardNum==3){
-      Type = 1;
-    }else if(cardNum==5){
-      Type = 2;
-    }else{
-      Type = 3;
-    }
     Serial.println("子音変更");
     Serial.print("母音:");
     Serial.println(Boin);
@@ -169,23 +112,17 @@ class StampWord{
         break;  
       case 1:
         if(Boin < 5){
-          pass.concat("k");
-        }else{
-          pass.concat("g");          
+          pass.concat("k");         
         }
         break;  
       case 2:
         if(Boin < 5){
-          pass.concat("s");
-        }else{
-          pass.concat("z");          
+          pass.concat("s");        
         }
         break;  
       case 3:
         if(Boin < 5){
-          pass.concat("t");
-        }else{
-          pass.concat("d");          
+          pass.concat("t");       
         }
         break;  
       case 4:
@@ -194,10 +131,6 @@ class StampWord{
       case 5:
         if(Boin < 5){
           pass.concat("h");
-        }else if(Boin < 10){
-          pass.concat("b");          
-        }else{
-          pass.concat("p");
         }
         break;  
       case 6:
@@ -231,7 +164,78 @@ class StampWord{
             pass.concat("nn");
             break;  
         }
-        break;  
+        break;
+        case 10:
+          pass.concat("g");
+          break;
+        case 11:
+          pass.concat("z");
+          break;
+        case 12:
+          pass.concat("d");
+          break;
+        case 13:
+          pass.concat("b");
+          break;
+        case 14:
+          pass.concat("p");
+          break;
+        case 15:
+          switch(beforeShiin){
+            case 1:
+              Shiin = 10;
+              pass.concat("g");
+              break;
+            case 2:
+              Shiin = 11;
+              pass.concat("z");
+              break;
+            case 3:
+              Shiin = 12;
+              pass.concat("d");
+              break;
+            case 5: 
+              Shiin = 13;
+              pass.concat("b");
+              break; 
+            case 10: 
+              Shiin = 1;
+              pass.concat("k");
+              break; 
+            case 11: 
+              Shiin = 2;
+              pass.concat("s");
+              break; 
+            case 12: 
+              Shiin = 3;
+              pass.concat("t");
+              break; 
+            case 13: 
+              Shiin = 5;
+              pass.concat("h");
+              break; 
+            case 14: 
+              Shiin = 13;
+              pass.concat("b");
+              break; 
+          }
+          break;
+        case 16:
+          switch(beforeShiin){
+            case 5: 
+              Shiin = 14;
+              pass.concat("p");
+              break; 
+            case 13: 
+              Shiin = 14;
+              pass.concat("p");
+              break; 
+            case 14: 
+              Shiin = 5;
+              pass.concat("h");
+              break; 
+          }
+          break;
     }
     //母音を設定
     if(Shiin!=7 && Shiin!=9){
@@ -255,8 +259,8 @@ class StampWord{
 };
 
 //String wordIDlist[10] = {"04 15 99 EA F0 64 81", "04 19 99 EA F0 64 81", "04 1D 99 EA F0 64 81", "04 21 99 EA F0 64 81", "04 25 99 EA F0 64 81", "04 29 99 EA F0 64 81", "04 2D 99 EA F0 64 81", "04 31 99 EA F0 64 81", "04 35 99 EA F0 64 81", "04 39 99 EA F0 64 81"};//カードIDの配列
-String imglist[10] = {"a.png", "ka.png", "sa.png", "ta.png", "na.png", "ha.png", "ma.png", "ya.png", "ra.png", "wa.png"};//画像ファイルのアドレス
-int key_num = 10;//idと画像の数
+String imglist[15] = {"a.png", "ka.png", "sa.png", "ta.png", "na.png", "ha.png", "ma.png", "ya.png", "ra.png", "wa.png", "ga.png", "za.png", "da.png", "ba.png", "pa.png"};//画像ファイルのアドレス
+int key_num = 17;//idと画像の数
 /*
 String panelIDlist[15] = {"04 3D 99 EA F0 64 81", "04 41 99 EA F0 64 81", "04 45 99 EA F0 64 81", "04 49 99 EA F0 64 81", "04 4D 99 EA F0 64 81",
                           "04 51 99 EA F0 64 81", "04 54 9A EA F0 64 81", "04 58 9A EA F0 64 81", "04 5C 9A EA F0 64 81", "04 60 9A EA F0 64 81",
@@ -391,7 +395,7 @@ String SDreadPanel(bool *panelNoAddF){
   return UID;  
 }
 
-//文字を読み取る関数
+//カードで文字を読み取る関数
 void ReadWord(){
   String Word = "";
   Serial.print("strUID = ");
@@ -404,31 +408,36 @@ void ReadWord(){
     Serial.println(Word);
     //SDカードからサンプルのUIDを読み込み、現在読み込んだUIDと比較
     if (strUID.equalsIgnoreCase(Word) ){  // 大文字小文字関係なく比較
+      Serial.print("カードのUID = ");
+      Serial.println(i);
       //UIDがUID1と一致した際の処理を書く
-      Serial.print("UID: ");
-      Serial.println(Word);
-      //ブザーの再生
-      M5.Speaker.tone(NOTE_DH2, 50); 
-      delay(100);
-      M5.Speaker.tone(NOTE_DH3, 50); 
-      delay(100);
-      M5.Speaker.tone(NOTE_DH4, 50); 
-      delay(100);
-      M5.Speaker.tone(NOTE_DH5, 50);
-      stampWord.ShiinChange(i);//母音変更を記憶
-      
-      //パスの生成 
-      kana = stampWord.ReturnPass();
-      Serial.println(stampWord.ReturnPass());
-      String imgPass = "/hiragana/";
-      imgPass.concat(kana);
-      imgPass.toCharArray(buf,imgPass.length()+1);//パスをchar型に変換
-      img_sw=true;//画像読込スイッチをOn
-      Serial.println(buf);//アドレスの確認
-      bts.println("CardRead");
-      delay(20);
-      wordReadF = true;
-      break;
+      if(!((i == 15 && (stampWord.Shiin == 0 || stampWord.Shiin == 4 || stampWord.Shiin == 6 || stampWord.Shiin == 7 || stampWord.Shiin == 8 || stampWord.Shiin == 9)) || 
+         (i == 16 && (stampWord.Shiin != 5 && stampWord.Shiin != 13 && stampWord.Shiin != 14)))){
+        Serial.print("UID: ");
+        Serial.println(Word);
+        //ブザーの再生
+        M5.Speaker.tone(NOTE_DH2, 50); 
+        delay(100);
+        M5.Speaker.tone(NOTE_DH3, 50); 
+        delay(100);
+        M5.Speaker.tone(NOTE_DH4, 50); 
+        delay(100);
+        M5.Speaker.tone(NOTE_DH5, 50);
+        stampWord.ShiinChange(i);//子音変更を記憶
+        
+        //パスの生成 
+        kana = stampWord.ReturnPass();
+        Serial.println(stampWord.ReturnPass());
+        String imgPass = "/hiragana/";
+        imgPass.concat(kana);
+        imgPass.toCharArray(buf,imgPass.length()+1);//パスをchar型に変換
+        img_sw=true;//画像読込スイッチをOn
+        Serial.println(buf);//アドレスの確認
+        bts.println("CardRead");
+        delay(20);
+        wordReadF = true;
+        break;
+      }
     }else{
       // もし登録されていないNFCなら情報を表示
       //mfrc522.PICC_DumpToSerial(&(mfrc522.uid));
