@@ -37,15 +37,13 @@ String kana="";//ハンコのもじ
 #define NOTE_DH6 990
 #define NOTE_DH7 112
 
-#define moji_a "04 15 99 EA F0 64 81"
-
 MFRC522 mfrc522(SS_PIN, RST_PIN);   // Create MFRC522 instance.
 MFRC522::MIFARE_Key key;
 bool img_sw=false;
 
 
 
-//スタンプに読み込まれている文字を記憶するクラス
+//スタンプに読み込まれている文字を管理するクラス
 class StampWord{
   public:
   int Boin;  //0~4あ~お
@@ -60,26 +58,11 @@ class StampWord{
   }
   //母音変更
   void BoinChange(long addNum){
-    //addNumだけ母音を足す
-    //0あなまら, 1かさた, 2は, 3やわ
     if(addNum > 0){
-      if(Boin < 4){
-        Boin += addNum;
-      }else{
-        Boin = 0;
-      }
+      Boin = (Boin+1) % 5;
     }else{
-      if(Boin > 0){
-        Boin += addNum;
-      }else{
-        Boin = 4;
-      }
+      Boin = (Boin==0) ? 4 : Boin-1;
     }
-    Serial.println("母音変更");
-    Serial.print("母音:");
-    Serial.println(Boin);
-    Serial.print("子音:");
-    Serial.println(Shiin);
   }
   //子音変更
   void ShiinChange(int cardNum){
@@ -88,14 +71,6 @@ class StampWord{
     if(Shiin != 15 && Shiin != 16){
       Boin = 0;
     }
-    
-    //0あなまら, 1かさた, 2は, 3やわ
-    //タイプ決定
-    Serial.println("子音変更");
-    Serial.print("母音:");
-    Serial.println(Boin);
-    Serial.print("子音:");
-    Serial.println(Shiin);
   }
   //画像のパスを返す
   String ReturnPass(){
@@ -239,16 +214,23 @@ class StampWord{
     }
     //母音を設定
     if(Shiin!=7 && Shiin!=9){
-      if(Boin==0 || Boin==5 || Boin==10){
-        pass.concat("a");
-      }else if(Boin==1 || Boin==6 || Boin==11){
-        pass.concat("i");
-      }else if(Boin==2 || Boin==7 || Boin==12){
-        pass.concat("u");
-      }else if(Boin==3 || Boin==8 || Boin==13){
-        pass.concat("e");
-      }else if(Boin==4 || Boin==9 || Boin==14){
-        pass.concat("o");
+      switch (Boin)
+      {
+        case 0:
+          pass.concat("a");
+          break;
+        case 1:
+          pass.concat("i");
+          break;
+        case 2:
+          pass.concat("u");
+          break;
+        case 3:
+          pass.concat("e");
+          break;
+        case 4:
+          pass.concat("o");
+          break;
       }
     }
 
@@ -258,15 +240,9 @@ class StampWord{
   }
 };
 
-//String wordIDlist[10] = {"04 15 99 EA F0 64 81", "04 19 99 EA F0 64 81", "04 1D 99 EA F0 64 81", "04 21 99 EA F0 64 81", "04 25 99 EA F0 64 81", "04 29 99 EA F0 64 81", "04 2D 99 EA F0 64 81", "04 31 99 EA F0 64 81", "04 35 99 EA F0 64 81", "04 39 99 EA F0 64 81"};//カードIDの配列
 String imglist[15] = {"a.png", "ka.png", "sa.png", "ta.png", "na.png", "ha.png", "ma.png", "ya.png", "ra.png", "wa.png", "ga.png", "za.png", "da.png", "ba.png", "pa.png"};//画像ファイルのアドレス
 int key_num = 17;//idと画像の数
-/*
-String panelIDlist[15] = {"04 3D 99 EA F0 64 81", "04 41 99 EA F0 64 81", "04 45 99 EA F0 64 81", "04 49 99 EA F0 64 81", "04 4D 99 EA F0 64 81",
-                          "04 51 99 EA F0 64 81", "04 54 9A EA F0 64 81", "04 58 9A EA F0 64 81", "04 5C 9A EA F0 64 81", "04 60 9A EA F0 64 81",
-                          "04 64 9A EA F0 64 81", "04 68 9A EA F0 64 81", "04 78 9A EA F0 64 81", "04 70 9A EA F0 64 81", "04 74 9A EA F0 64 81"
-                          };//カードIDの配列
-                          */
+
 char buf[100];//画像ファイル読み出しpath用のバッファ
 
 String strUID;//UID記憶用変数
@@ -337,19 +313,12 @@ void loop() {
     strUID = strBuf[0] + " " + strBuf[1] + " " + strBuf[2] + " " + strBuf[3];
     Serial.println("bufLen = 4 ");
     Serial.println(strUID);
-    //bts.println(strUID);
   }else if(bufLength == 7){
     //UID長い時は下のコードみたいに伸ばしておく
     strUID = strBuf[0] + " " + strBuf[1] + " " + strBuf[2] + " " + strBuf[3] + " " + strBuf[4] + " " + strBuf[5] + " " + strBuf[6];
     Serial.println("bufLen = 7 ");
     Serial.println(strUID);
-    //bts.println(strUID);
   }
-  //UID短い時は上のコード
-  //strUID = strBuf[0] + " " + strBuf[1] + " " + strBuf[2] + " " + strBuf[3];
-  //UID長い時は下のコードみたいに伸ばしておく
-  //strUID = strBuf[0] + " " + strBuf[1] + " " + strBuf[2] + " " + strBuf[3] + " " + strBuf[4] + " " + strBuf[5] + " " + strBuf[6];
-  //Serial.println(strUID);
 
   wordReadF = false;
   
@@ -524,18 +493,16 @@ void ButtonPush(){
     M5.Speaker.tone(NOTE_DH2, 50);
     
     if(type == "Head"){
-        type = "Body";
-        bts.println(type);
-        M5.Lcd.drawPngFile(SD, "/Parts/Body.png", 0, 0);//画像の読み込み
+      type = "Body";
+      M5.Lcd.drawPngFile(SD, "/Parts/Body.png", 0, 0);//画像の読み込み
     }else if(type == "Body"){
-        type = "Hip";
-        bts.println(type);
-        M5.Lcd.drawPngFile(SD, "/Parts/Hip.png", 0, 0);//画像の読み込み
+      type = "Hip";
+      M5.Lcd.drawPngFile(SD, "/Parts/Hip.png", 0, 0);//画像の読み込み
     }else if(type == "Hip"){
-        type = "Head";        
-        bts.println(type);
-        M5.Lcd.drawPngFile(SD, "/Parts/Head.png", 0, 0);//画像の読み込み
+      type = "Head";
+      M5.Lcd.drawPngFile(SD, "/Parts/Head.png", 0, 0);//画像の読み込み
     }    
+    bts.println(type);
   }
 }
 
