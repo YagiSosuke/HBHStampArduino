@@ -14,13 +14,28 @@
 #include <MFRC522.h>
 #include "BluetoothSerial.h"
 
+//DMA転送に必要なファイル
+#pragma GCC optimize ("O3")
+#include <M5Stack.h>
+//#include <M5StackUpdater.h>     // https://github.com/tobozo/M5Stack-SD-Updater/
+#include <esp_heap_alloc_caps.h>
+#include <vector>
+#include "src/MainClass.h"
+#include "src/DMADrawer.h"
+MainClass main;
+std::vector<const uint8_t*> fbuf;  //画像情報
+std::vector<int32_t> fbufsize;     //サイズ情報
+//ここまで - DMA転送に必要なファイル
+
 BluetoothSerial bts;
 String type="Head";//ハンコのタイプ
 String kana="";//ハンコのもじ
 
+//ピン
 #define SS_PIN 21
 #define RST_PIN 33
 
+//トーン関数で使用する
 #define NOTE_DL1 147
 #define NOTE_DL2 165
 #define NOTE_DL3 175
@@ -41,7 +56,50 @@ MFRC522 mfrc522(SS_PIN, RST_PIN);   // Create MFRC522 instance.
 MFRC522::MIFARE_Key key;
 bool img_sw=false;
 
+//String imglist[15] = {"a.png", "ka.png", "sa.png", "ta.png", "na.png", "ha.png", "ma.png", "ya.png", "ra.png", "wa.png", "ga.png", "za.png", "da.png", "ba.png", "pa.png"};//画像ファイルのアドレス
+// ここで画像ファイルのディレクトリ名を指定する
+std::vector<String> imageDirs = {
+  "/_hiragana/a_line", "/_hiragana/k_line", "/_hiragana/s_line", "/_hiragana/t_line", "/_hiragana/n_line", 
+  "/_hiragana/h_line", "/_hiragana/m_line", "/_hiragana/y_line", "/_hiragana/r_line", "/_hiragana/w_line", 
+  "/_hiragana/g_line", "/_hiragana/z_line", "/_hiragana/d_line", "/_hiragana/b_line", "/_hiragana/p_line"};
+int key_num = 17;//idと画像の数
 
+char buf[100];//画像ファイル読み出しpath用のバッファ
+
+String strUID;//UID記憶用変数
+
+bool wordReadF;//読み込んだものが言葉かどうか
+
+File csvFile;//UIDのcsvファイル
+
+//DMAで使用 - 画像が読み込まれているディレクトリを開く
+bool loadImages(const String& path)
+{
+  //現在読み込まれているメモリを開放する
+  bool res = false;
+  if (!fbuf.empty()) {
+    for (int i = 0; i < fbuf.size(); i++) free(const_cast<uint8_t*>(fbuf[i]));
+  }
+  fbuf.clear();
+  fbufsize.clear();
+
+  //メモリに画像を読み込む
+  Serial.println(path);
+  File root = SD.open(path);
+  File file = root.openNextFile();
+  uint8_t* tmp;
+  while (file) {
+    tmp = (uint8_t*)pvPortMallocCaps(file.size(), MALLOC_CAP_DEFAULT);
+    if (tmp > 0) {
+      file.read(tmp, file.size());
+      fbufsize.push_back(file.size());
+      fbuf.push_back(tmp);
+      res = true;
+    }
+    file = root.openNextFile();
+  }
+  return res;
+}
 
 //スタンプに読み込まれている文字を管理するクラス
 class StampWord{
@@ -58,10 +116,17 @@ class StampWord{
   }
   //母音変更
   void BoinChange(long addNum){
-    if(addNum > 0){
-      Boin = (Boin+1) % 5;
+    int boinDataNum;
+    if(Shiin == 7 || Shiin == 9){
+      boinDataNum = boinDataNum = 3;
     }else{
-      Boin = (Boin==0) ? 4 : Boin-1;
+      boinDataNum = 5;
+    }
+
+    if(addNum > 0){
+      Boin = (Boin+1) % boinDataNum;
+    }else{
+      Boin = (Boin==0) ? boinDataNum-1 : Boin-1;
     }
   }
   //子音変更
@@ -239,19 +304,6 @@ class StampWord{
     return pass;
   }
 };
-
-String imglist[15] = {"a.png", "ka.png", "sa.png", "ta.png", "na.png", "ha.png", "ma.png", "ya.png", "ra.png", "wa.png", "ga.png", "za.png", "da.png", "ba.png", "pa.png"};//画像ファイルのアドレス
-int key_num = 17;//idと画像の数
-
-char buf[100];//画像ファイル読み出しpath用のバッファ
-
-String strUID;//UID記憶用変数
-
-bool wordReadF;//読み込んだものが言葉かどうか
-
-File csvFile;//UIDのcsvファイル
-
-//スタンプに読み込まれている文字を記憶するクラス
 StampWord stampWord;
 
 
@@ -259,19 +311,35 @@ StampWord stampWord;
  * Initialize.
  */
 void setup() {
-    M5.begin();
-    Serial.begin(115200);         // Initialize serial communications with the PC
-    while (!Serial);            // Do nothing if no serial port is opened (added for Arduinos based on ATMEGA32U4)
-    SPI.begin();                // Init SPI bus
-    mfrc522.PCD_Init();         // Init MFRC522 card
-    Serial.println(F("Scan PICC to see UID, SAK, type, and data blocks..."));
-    dump_byte_array(key.keyByte, MFRC522::MF_KEY_SIZE);
-    bts.begin("M5Stack");//PC側で確認するときの名前
+  M5.begin();
+  Serial.begin(115200);         // Initialize serial communications with the PC
+  while (!Serial);            // Do nothing if no serial port is opened (added for Arduinos based on ATMEGA32U4)
+  SPI.begin();                // Init SPI bus
+  mfrc522.PCD_Init();         // Init MFRC522 card
+  Serial.println(F("Scan PICC to see UID, SAK, type, and data blocks..."));
+  dump_byte_array(key.keyByte, MFRC522::MF_KEY_SIZE);
+  bts.begin("M5Stack");//PC側で確認するときの名前
 
-    stampWord = StampWord();
+  stampWord = StampWord();
     
-    M5.Lcd.drawPngFile(SD, "/hiragana/a.png", 80, 0, 240, 240, 40, 0);//画像の読み込み
-    M5.Lcd.drawPngFile(SD, "/Parts/Head.png", 0, 0);//画像の読み込み
+  //DMA転送に必要な処理
+#ifdef __M5STACKUPDATER_H
+  if(digitalRead(BUTTON_A_PIN) == 0) {
+     Serial.println("Will Load menu binary");
+     updateFromFS(SD);
+     ESP.restart();
+  }
+#endif
+
+  main.setup(&M5.Lcd);
+
+  fbuf.clear();
+  fbufsize.clear();
+  loadImages(imageDirs[0]);
+
+  M5.Lcd.drawJpg(fbuf[0], fbufsize[0], 80, 0, 240, 240, 40, 0);//画像の読み込み
+  M5.Lcd.drawJpgFile(SD, "/Parts/Head.jpg", 0, 0);//画像の読み込み
+  //ここまで - DMA転送に必要な処理
 }
 
 void loop() {
@@ -283,7 +351,8 @@ void loop() {
     //bts.print(",");
     bts.println(kana);
     //bts.println(buf);
-    M5.Lcd.drawPngFile(SD, buf, 80, 0, 240, 240, 40, 0);//画像の読み込み
+    //M5.Lcd.drawPngFile(SD, buf, 80, 0, 240, 240, 40, 0);//画像の読み込み
+    M5.Lcd.drawJpg(fbuf[stampWord.Boin], fbufsize[stampWord.Boin], 80, 0, 240, 240, 40, 0);       // <= drawJpg (DMA transfer)
     img_sw=false;//画像読込スイッチをoff
   }
   
@@ -405,6 +474,8 @@ void ReadWord(){
         bts.println("CardRead");
         delay(20);
         wordReadF = true;
+
+        loadImages(imageDirs[stampWord.Shiin]);
         break;
       }
     }else{
@@ -494,13 +565,13 @@ void ButtonPush(){
     
     if(type == "Head"){
       type = "Body";
-      M5.Lcd.drawPngFile(SD, "/Parts/Body.png", 0, 0);//画像の読み込み
+      M5.Lcd.drawJpgFile(SD, "/Parts/Body.jpg", 0, 0);//画像の読み込み
     }else if(type == "Body"){
       type = "Hip";
-      M5.Lcd.drawPngFile(SD, "/Parts/Hip.png", 0, 0);//画像の読み込み
+      M5.Lcd.drawJpgFile(SD, "/Parts/Hip.jpg", 0, 0);//画像の読み込み
     }else if(type == "Hip"){
       type = "Head";
-      M5.Lcd.drawPngFile(SD, "/Parts/Head.png", 0, 0);//画像の読み込み
+      M5.Lcd.drawJpgFile(SD, "/Parts/Head.jpg", 0, 0);//画像の読み込み
     }    
     bts.println(type);
   }
