@@ -312,6 +312,8 @@ StampWord stampWord;
  */
 void setup() {
   M5.begin();
+  Wire.begin();
+  M5.Power.begin();
   Serial.begin(115200);         // Initialize serial communications with the PC
   while (!Serial);            // Do nothing if no serial port is opened (added for Arduinos based on ATMEGA32U4)
   SPI.begin();                // Init SPI bus
@@ -358,6 +360,7 @@ void loop() {
   
   
   ButtonPush();
+  //SerialRead();
   
   // Look for new cards
   if ( ! mfrc522.PICC_IsNewCardPresent()) {
@@ -589,7 +592,68 @@ unsigned long getID(){
   mfrc522.PICC_HaltA(); // Stop reading
   return hex_num;
 }
- 
+
+//送信された値を読み取る処理
+void SerialRead() {
+  int i=0;
+  char read_c;                       //1文字読み込み
+  char read_datas[15];               //受信文字列
+  //データ受信
+  if (bts.available()) {          //受信データがある時
+    for(i; i < 15; i++){
+      if (bts.available()) {
+        read_c = bts.read();      //1文字読み込み
+        read_datas[i] = read_c;
+        if (read_c == 'z'){          // 文字列の終わりは'z'で判断
+          break; 
+        }                            //zがあるとループから抜け出す
+      }
+    }
+    read_datas[i] = '¥0';            //受信データの最後にEOFを付加
+    DataAnalysis(read_datas);        //データを解析する
+  }
+}
+//値を解析する処理
+void DataAnalysis(char read_datas[15]){
+    //データ解析////////////////////////////////////////////////////////
+
+    //現在の文字と部位を返す
+    if(read_datas[0]=='N' && read_datas[1]=='o' && read_datas[2]=='w' && read_datas[3]=='D' && read_datas[4]=='a' && read_datas[5]=='t' && read_datas[6]=='a'){
+      bts.println(type);
+      bts.println(kana);
+    }
+
+}
+
+//バッテリ―残量を取得する
+void getButteryLevel(){
+  int battlevel = 0;
+  byte retval;
+  Wire.beginTransmission(0x75);
+  Wire.write(0x78);
+  bts.println(Wire.read());
+  if (Wire.endTransmission(false) == 0 && Wire.requestFrom(0x75, 1)) {
+      retval = Wire.read() & 0xF0;
+      if (retval == 0xE0) battlevel = 25;
+      else if (retval == 0xC0) battlevel = 50;
+      else if (retval == 0x80) battlevel = 75;
+      else if (retval == 0x00) battlevel = 100;
+  }
+  bts.println(battlevel);
+  /*
+  if (lastbattery != battlevel){
+      M5.Lcd.fillRect(250, 5, 56, 21, RGB(31, 63, 31));
+      M5.Lcd.fillRect(306, 9, 4, 13, RGB(31, 63, 31));
+      M5.Lcd.fillRect(252, 7, 52, 17, RGB(0, 0, 0));
+      if (battlevel <= 25)
+          M5.Lcd.fillRect(253, 8, battlevel/2, 15, RGB(31, 20, 10));
+      else
+          M5.Lcd.fillRect(253, 8, battlevel/2, 15, RGB(20, 40, 31));
+      lastbattery = battlevel;
+  }
+  */
+}
+
 /**
  * Helper routine to dump a byte array as hex values to Serial.
  */
