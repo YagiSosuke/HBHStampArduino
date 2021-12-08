@@ -72,6 +72,9 @@ bool wordReadF;//読み込んだものが言葉かどうか
 
 File csvFile;//UIDのcsvファイル
 
+bool pushF = false;
+bool showablePushTextF = false;
+
 //DMAで使用 - 画像が読み込まれているディレクトリを開く
 bool loadImages(const String& path)
 {
@@ -359,49 +362,57 @@ void loop() {
   
   ButtonPush();
   
-  // Look for new cards
-  if ( ! mfrc522.PICC_IsNewCardPresent()) {
-    return;
-  } 
   // Select one of the cards
-  if ( ! mfrc522.PICC_ReadCardSerial()) {
+  if (mfrc522.PICC_ReadCardSerial()) {
+    pushF = true;
+    showablePushTextF = true;
+
+    String strBuf[mfrc522.uid.size];
+    for (byte i = 0; i < mfrc522.uid.size; i++) {
+      strBuf[i] =  String(mfrc522.uid.uidByte[i], HEX);  // (E)using a constant integer
+      if(strBuf[i].length() == 1){  // 1桁の場合は先頭に0を追加
+        strBuf[i] = "0" + strBuf[i];
+      }
+    }
+
+    //読み込んだUIDを変数に入れる処理
+    int bufLength = sizeof(strBuf) / sizeof(strBuf[0]);
+    if(bufLength == 4){
+      strUID = strBuf[0] + " " + strBuf[1] + " " + strBuf[2] + " " + strBuf[3];
+      Serial.println("bufLen = 4 ");
+      Serial.println(strUID);
+    }else if(bufLength == 7){
+      //UID長い時は下のコードみたいに伸ばしておく
+      strUID = strBuf[0] + " " + strBuf[1] + " " + strBuf[2] + " " + strBuf[3] + " " + strBuf[4] + " " + strBuf[5] + " " + strBuf[6];
+      Serial.println("bufLen = 7 ");
+      Serial.println(strUID);
+    }
+
+    wordReadF = false;
+    
+    //言葉を読んだ時、以下を実行
+    csvFile = SD.open("/UID/word.csv");
+    ReadWord();  
+    csvFile.close();
+    
+    if(!wordReadF){
+      //パネルを読んだ時、以下を実行
+      csvFile = SD.open("/UID/panel.csv");
+      PanelPush();
+      csvFile.close();
+    }  
     return;
   }
  
-  String strBuf[mfrc522.uid.size];
-  for (byte i = 0; i < mfrc522.uid.size; i++) {
-    strBuf[i] =  String(mfrc522.uid.uidByte[i], HEX);  // (E)using a constant integer
-    if(strBuf[i].length() == 1){  // 1桁の場合は先頭に0を追加
-      strBuf[i] = "0" + strBuf[i];
+  // Look for new cards
+  if ( ! mfrc522.PICC_IsNewCardPresent()) {
+    if(!pushF && showablePushTextF){
+      bts.println("notNewPanelRead");
+      showablePushTextF = false;
     }
-  }
-
-  //読み込んだUIDを変数に入れる処理
-  int bufLength = sizeof(strBuf) / sizeof(strBuf[0]);
-  if(bufLength == 4){
-    strUID = strBuf[0] + " " + strBuf[1] + " " + strBuf[2] + " " + strBuf[3];
-    Serial.println("bufLen = 4 ");
-    Serial.println(strUID);
-  }else if(bufLength == 7){
-    //UID長い時は下のコードみたいに伸ばしておく
-    strUID = strBuf[0] + " " + strBuf[1] + " " + strBuf[2] + " " + strBuf[3] + " " + strBuf[4] + " " + strBuf[5] + " " + strBuf[6];
-    Serial.println("bufLen = 7 ");
-    Serial.println(strUID);
-  }
-
-  wordReadF = false;
-  
-  //言葉を読んだ時、以下を実行
-  csvFile = SD.open("/UID/word.csv");
-  ReadWord();  
-  csvFile.close();
-  
-  if(!wordReadF){
-    //パネルを読んだ時、以下を実行
-    csvFile = SD.open("/UID/panel.csv");
-    PanelPush();
-    csvFile.close();
-  }  
+    pushF = false;
+    return;
+  } 
 }
 
 
