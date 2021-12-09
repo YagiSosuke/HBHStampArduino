@@ -16,7 +16,6 @@
 
 //DMA転送に必要なファイル
 #pragma GCC optimize ("O3")
-#include <M5Stack.h>
 //#include <M5StackUpdater.h>     // https://github.com/tobozo/M5Stack-SD-Updater/
 #include <esp_heap_alloc_caps.h>
 #include <vector>
@@ -314,17 +313,20 @@ StampWord stampWord;
  * Initialize.
  */
 void setup() {
-  M5.begin();
+  M5.begin(); 
+  M5.Power.begin();
+
   Serial.begin(115200);         // Initialize serial communications with the PC
   while (!Serial);            // Do nothing if no serial port is opened (added for Arduinos based on ATMEGA32U4)
   SPI.begin();                // Init SPI bus
+
   mfrc522.PCD_Init();         // Init MFRC522 card
+                              //バッテリ―残量が読めない原因
   Serial.println(F("Scan PICC to see UID, SAK, type, and data blocks..."));
   dump_byte_array(key.keyByte, MFRC522::MF_KEY_SIZE);
   bts.begin("M5Stack");//PC側で確認するときの名前
-
+  
   stampWord = StampWord();
-    
   //DMA転送に必要な処理
 #ifdef __M5STACKUPDATER_H
   if(digitalRead(BUTTON_A_PIN) == 0) {
@@ -343,6 +345,7 @@ void setup() {
   M5.Lcd.drawJpg(fbuf[0], fbufsize[0], 80, 0, 240, 240, 40, 0);//画像の読み込み
   M5.Lcd.drawJpgFile(SD, "/Parts/Head.jpg", 0, 0);//画像の読み込み
   //ここまで - DMA転送に必要な処理
+
 }
 
 void loop() {
@@ -361,7 +364,9 @@ void loop() {
   
   
   ButtonPush();
-  
+  SerialRead();
+
+
   // Select one of the cards
   if (mfrc522.PICC_ReadCardSerial()) {
     pushF = true;
@@ -585,8 +590,47 @@ void ButtonPush(){
       M5.Lcd.drawJpgFile(SD, "/Parts/Head.jpg", 0, 0);//画像の読み込み
     }    
     bts.println(type);
+
+    bts.print("Power printable: ");
+    bts.println(M5.Power.canControl());
   }
 }
+
+
+//シリアル通信で送られてきたコマンドを読み込む巻数
+void SerialRead() {
+
+  int i=0;
+  char read_c;                       //1文字読み込み
+  char read_datas[15];               //受信文字列
+  //データ受信
+  if (bts.available()) {          //受信データがある時
+    while (1) {
+      if (bts.available()) {
+        read_c = bts.read();      //1文字読み込み
+        read_datas[i] = read_c;
+        if (read_c == 'z'){          // 文字列の終わりは'z'で判断
+          break; 
+        }                            //zがあるとループから抜け出す
+        i++;
+      }
+    }
+    read_datas[i] = '¥0';            //受信データの最後にEOFを付加
+    DataAnalysis(read_datas);        //データを解析する
+  }
+}
+//データを分析する処理
+void DataAnalysis(char read_datas[15]){
+    //データ解析////////////////////////////////////////////////////////
+    
+    //現在読まれている部位と文字を返す
+    if(read_datas[0]=='N' && read_datas[1]=='o' && read_datas[2]=='w' && read_datas[3]=='D' && read_datas[4]=='a' && read_datas[5]=='t' && read_datas[6]=='a'){
+      bts.println(type);
+      bts.println(kana);
+    }
+}
+
+
 
 unsigned long getID(){
   if ( ! mfrc522.PICC_ReadCardSerial()) { //Since a PICC placed get Serial and continue
