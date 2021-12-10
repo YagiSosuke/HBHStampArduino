@@ -74,6 +74,9 @@ File csvFile;//UIDのcsvファイル
 bool pushF = false;
 bool showablePushTextF = false;
 
+static int giBattery = 0;
+static int giBatteryOld = 0xFF;
+
 //DMAで使用 - 画像が読み込まれているディレクトリを開く
 bool loadImages(const String& path)
 {
@@ -314,7 +317,6 @@ StampWord stampWord;
  */
 void setup() {
   M5.begin(); 
-
   Serial.begin(115200);         // Initialize serial communications with the PC
   while (!Serial);            // Do nothing if no serial port is opened (added for Arduinos based on ATMEGA32U4)
   SPI.begin();                // Init SPI bus
@@ -368,9 +370,6 @@ void loop() {
 
   // Select one of the cards
   if (mfrc522.PICC_ReadCardSerial()) {
-    pushF = true;
-    showablePushTextF = true;
-
     String strBuf[mfrc522.uid.size];
     for (byte i = 0; i < mfrc522.uid.size; i++) {
       strBuf[i] =  String(mfrc522.uid.uidByte[i], HEX);  // (E)using a constant integer
@@ -395,16 +394,22 @@ void loop() {
     wordReadF = false;
     
     //言葉を読んだ時、以下を実行
-    csvFile = SD.open("/UID/word.csv");
-    ReadWord();  
-    csvFile.close();
-    
+    if(!pushF){
+      csvFile = SD.open("/UID/word.csv");
+      ReadWord();  
+      csvFile.close();
+    }
+
     if(!wordReadF){
       //パネルを読んだ時、以下を実行
       csvFile = SD.open("/UID/panel.csv");
       PanelPush();
       csvFile.close();
     }  
+
+    pushF = true;
+    showablePushTextF = true;
+
     return;
   }
  
