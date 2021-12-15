@@ -13,6 +13,7 @@
 #include <SPI.h>
 #include <MFRC522.h>
 #include "BluetoothSerial.h"
+#include <Wire.h>
 
 //DMA転送に必要なファイル
 #pragma GCC optimize ("O3")
@@ -412,7 +413,6 @@ void loop() {
 
     return;
   }
- 
   // Look for new cards
   if ( ! mfrc522.PICC_IsNewCardPresent()) {
     if(!pushF && showablePushTextF){
@@ -631,6 +631,11 @@ void DataAnalysis(char read_datas[15]){
     if(read_datas[0]=='N' && read_datas[1]=='o' && read_datas[2]=='w' && read_datas[3]=='D' && read_datas[4]=='a' && read_datas[5]=='t' && read_datas[6]=='a'){
       bts.println(type);
       bts.println(kana);
+    }
+
+    //接続確認完了の意味の返事をする
+    if(read_datas[0]=='C' && read_datas[1]=='h' && read_datas[2]=='e' && read_datas[3]=='c' && read_datas[4]=='k'){
+      bts.println("connect");
     }
 }
 
